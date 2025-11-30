@@ -1,9 +1,11 @@
 import { DataTypes, Model } from "sequelize";
 import { sequelize } from "../config/db";
+import Inventory from "./Inventory";
 
 export class Location extends Model {
   public id!: number;
   public name!: string;
+  public inventories?: Inventory[];
 }
 
 Location.init(

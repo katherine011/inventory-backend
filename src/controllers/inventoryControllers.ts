@@ -9,7 +9,7 @@ export const getInventories = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
     const locationFilter = req.query.location as string;
-    const sort = (req.query.sort as string) || "name_asc";
+    const sort = (req.query.sort as string) || "newest";
 
     const where: WhereOptions = {};
     if (locationFilter && locationFilter !== "ყველა") {
@@ -24,6 +24,7 @@ export const getInventories = async (req: Request, res: Response) => {
     if (sort === "name_desc") order.push(["name", "DESC"]);
     if (sort === "price_asc") order.push(["price", "ASC"]);
     if (sort === "price_desc") order.push(["price", "DESC"]);
+    if (sort === "newest") order.push(["createdAt", "DESC"]);
 
     const { rows, count } = await Inventory.findAndCountAll({
       where,
@@ -36,6 +37,45 @@ export const getInventories = async (req: Request, res: Response) => {
     res.json({ total: count, inventories: rows });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch inventories" });
+  }
+};
+
+export const getStatistics = async (req: Request, res: Response) => {
+  try {
+    const locations = await Location.findAll({
+      include: [
+        {
+          model: Inventory,
+          as: "inventories",
+          attributes: ["price"],
+        },
+      ],
+    });
+
+    const stats = locations.map((el) => {
+      const items = el.inventories as { price: number }[];
+
+      const count = items.length;
+
+      const totalPrice = items.reduce((sum, x) => sum + x.price, 0);
+
+      return {
+        location: el.name,
+        count,
+        totalPrice: parseFloat(totalPrice.toFixed(2)),
+      };
+    });
+
+    const totalProducts = stats.reduce((sum, x) => sum + x.count, 0);
+    const totalValue = stats.reduce((sum, x) => sum + x.totalPrice, 0);
+
+    res.json({
+      stats,
+      totalProducts,
+      totalValue: parseFloat(totalValue.toFixed(2)),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "failed to load statistics" });
   }
 };
 
