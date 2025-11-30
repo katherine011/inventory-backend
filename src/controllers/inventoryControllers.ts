@@ -2,79 +2,123 @@ import { Request, Response } from "express";
 import Inventory from "../models/Inventory";
 import Location from "../models/Location";
 import { WhereOptions, Order } from "sequelize";
+import { sequelize } from "../config/db";
 
 export const getInventories = async (req: Request, res: Response) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Number(req.query.limit) || 20); // max limit = 100
     const offset = (page - 1) * limit;
+
     const locationFilter = req.query.location as string;
-    const sort = (req.query.sort as string) || "newest";
+    const sort = (req.query.sort as string) || "name_asc";
 
     const where: WhereOptions = {};
+
     if (locationFilter && locationFilter !== "ყველა") {
       const location = await Location.findOne({
         where: { name: locationFilter },
+        attributes: ["id"],
       });
       if (location) where.locationId = location.id;
     }
 
-    const order: Order = [];
-    if (sort === "name_asc") order.push(["name", "ASC"]);
-    if (sort === "name_desc") order.push(["name", "DESC"]);
-    if (sort === "price_asc") order.push(["price", "ASC"]);
-    if (sort === "price_desc") order.push(["price", "DESC"]);
-    if (sort === "newest") order.push(["createdAt", "DESC"]);
+    let order: Order = [];
+    switch (sort) {
+      case "name_asc":
+        order = [["name", "ASC"]];
+        break;
+      case "name_desc":
+        order = [["name", "DESC"]];
+        break;
+      case "price_asc":
+        order = [["price", "ASC"]];
+        break;
+      case "price_desc":
+        order = [["price", "DESC"]];
+        break;
+      default:
+        order = [["id", "ASC"]];
+        break;
+    }
 
     const { rows, count } = await Inventory.findAndCountAll({
       where,
-      include: [{ model: Location, as: "location", attributes: ["name"] }],
       limit,
       offset,
       order,
+      attributes: ["id", "name", "price", "locationId"],
+      include: [
+        {
+          model: Location,
+          as: "location",
+          attributes: ["name"],
+        },
+      ],
     });
 
-    res.json({ total: count, inventories: rows });
+    return res.json({
+      total: count,
+      page,
+      perPage: limit,
+      inventories: rows,
+    });
   } catch (error) {
-    res.status(500).json({ error: "failed to fetch inventories" });
+    return res.status(500).json({ error: "failed to fetch inventories" });
   }
 };
 
 export const getStatistics = async (req: Request, res: Response) => {
   try {
-    const locations = await Location.findAll({
+    const stats = await Location.findAll({
+      attributes: [
+        "id",
+        "name",
+        [sequelize.fn("COUNT", sequelize.col("inventories.id")), "count"],
+        [sequelize.fn("SUM", sequelize.col("inventories.price")), "totalPrice"],
+      ],
       include: [
         {
           model: Inventory,
           as: "inventories",
-          attributes: ["price"],
+          attributes: [],
         },
       ],
+      group: ["Location.id", "Location.name"],
+      raw: true,
     });
 
-    const stats = locations.map((el) => {
-      const items = el.inventories as { price: number }[];
+    interface StatResult {
+      id: number;
+      name: string;
+      count: string;
+      totalPrice: string | null;
+    }
 
-      const count = items.length;
+    const statResults = stats as unknown as StatResult[];
 
-      const totalPrice = items.reduce((sum, x) => sum + x.price, 0);
+    const totalProducts = statResults.reduce(
+      (sum, x) => sum + parseInt(x.count),
+      0
+    );
+    const totalValue = statResults.reduce(
+      (sum, x) => sum + parseFloat(x.totalPrice || "0"),
+      0
+    );
 
-      return {
-        location: el.name,
-        count,
-        totalPrice: parseFloat(totalPrice.toFixed(2)),
-      };
-    });
-
-    const totalProducts = stats.reduce((sum, x) => sum + x.count, 0);
-    const totalValue = stats.reduce((sum, x) => sum + x.totalPrice, 0);
+    const formattedStats = statResults.map((el) => ({
+      location: el.name,
+      count: parseInt(el.count),
+      totalPrice: parseFloat(parseFloat(el.totalPrice || "0").toFixed(2)),
+    }));
 
     res.json({
-      stats,
+      stats: formattedStats,
       totalProducts,
       totalValue: parseFloat(totalValue.toFixed(2)),
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "failed to load statistics" });
   }
 };
@@ -89,6 +133,32 @@ export const createInventory = async (req: Request, res: Response) => {
     res.status(201).json(inventory);
   } catch (error) {
     res.status(500).json({ error: "failed to create inventory" });
+  }
+};
+
+export const updateInventory = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const { name, price, locationId } = req.body;
+
+    if (!name || !price || !locationId) {
+      return res.status(400).json({ error: "ყველა ველი სავალდებულოა" });
+    }
+
+    const inventory = await Inventory.findByPk(id);
+    if (!inventory) {
+      return res.status(404).json({ error: "inventory not found" });
+    }
+
+    inventory.name = name;
+    inventory.price = price;
+    inventory.locationId = locationId;
+
+    await inventory.save();
+
+    res.json({ message: "inventory updated", inventory });
+  } catch (error) {
+    res.status(500).json({ error: "failed to update inventory" });
   }
 };
 

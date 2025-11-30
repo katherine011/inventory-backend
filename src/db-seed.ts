@@ -5,7 +5,6 @@ import Inventory from "./models/Inventory";
 async function seed() {
   try {
     await sequelize.sync({ force: true });
-    console.log("Database synced");
 
     const locationsData = [
       "მთავარი ოფისი",
@@ -20,7 +19,6 @@ async function seed() {
       const loc = await Location.create({ name });
       locationInstances.push(loc);
     }
-    console.log("Locations created");
 
     const BATCH_SIZE = 10000;
     const TOTAL_PRODUCTS = 500000;
@@ -47,13 +45,10 @@ async function seed() {
       }
 
       await Inventory.bulkCreate(products);
-      console.log(`Inserted products ${batchStart} to ${batchEnd}`);
     }
 
-    console.log("DB seeded with 500,000 products");
     process.exit(0);
   } catch (err) {
-    console.error("Seeding failed:", err);
     process.exit(1);
   }
 }
