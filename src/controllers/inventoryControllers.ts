@@ -3,11 +3,12 @@ import Inventory from "../models/Inventory";
 import Location from "../models/Location";
 import { WhereOptions, Order } from "sequelize";
 import { sequelize } from "../config/db";
+import { Op } from "sequelize";
 
 export const getInventories = async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Number(req.query.limit) || 20); // max limit = 100
+    const limit = Math.min(100, Number(req.query.limit) || 20);
     const offset = (page - 1) * limit;
 
     const locationFilter = req.query.location as string;
@@ -84,6 +85,7 @@ export const getStatistics = async (req: Request, res: Response) => {
           attributes: [],
         },
       ],
+
       group: ["Location.id", "Location.name"],
       raw: true,
     });
@@ -120,6 +122,19 @@ export const getStatistics = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "failed to load statistics" });
+  }
+};
+
+export const getLocations = async (req: Request, res: Response) => {
+  try {
+    const locations = await Location.findAll({
+      where: { name: { [Op.ne]: "" } },
+      attributes: ["id", "name"],
+      order: [["name", "ASC"]],
+    });
+    res.json({ locations });
+  } catch (error) {
+    res.status(500).json({ error: "ლოკაციების მოპოვება ვერ მოხერხდა" });
   }
 };
 

@@ -4,11 +4,11 @@ import inventoryRoutes from "./routes/inventoryRoutes";
 import cors from "cors";
 
 const app = express();
-const PORT = 3001; 
+const PORT = 3001;
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "http://localhost:4200",
   })
 );
 

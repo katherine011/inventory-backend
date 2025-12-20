@@ -12,6 +12,7 @@ async function seed() {
       "კავეა თბილისი მოლი",
       "კავეა ისთ ფოინთი",
       "კავეა სითი მოლი",
+      ""
     ];
 
     const locationInstances = [];
